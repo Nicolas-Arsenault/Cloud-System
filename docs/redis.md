@@ -40,6 +40,13 @@ Stream fields written by the API:
 - `zip`
 - `query`
 
+Worker behavior:
+
+- One consumer group per retailer stream: `group:retailer:<retailer>`
+- Workers only poll retailer streams with free semaphore capacity
+- Workers reclaim pending entries idle for more than 5 minutes
+- Reclaim should happen before reading fresh `>` messages when capacity exists
+
 ## In-Flight Lock
 
 - Key: `lock:listings:<retailer>:<zip>:<normalized_query>`
@@ -50,6 +57,12 @@ Stream fields written by the API:
 - Delete owner: worker on completion
 
 This prevents duplicate enqueue of the same retailer/zip/query while work is already in flight.
+
+Worker behavior:
+
+- On success, clear the lock before ACKing the stream entry
+- On terminal failure, clear the lock before ACKing the failed entry
+- If a task is skipped because the retailer circuit is open, clear the lock and ACK the task
 
 ## Retailer Rate Limit
 
@@ -76,6 +89,8 @@ Behavior:
 - The API reads this key after retailer rate limiting.
 - If the value is greater than `SCRAPE_HOUR_THRESHOLD`, the API returns `429 {"error":"too busy"}`.
 - Missing key is treated as `0`.
+- The worker increments this key when a scrape attempt starts.
+- The key should have a 1-hour TTL from first increment.
 
 ## Circuit Breaker
 
@@ -91,6 +106,7 @@ Behavior:
 - On each retailer failure, the worker increments `failures:<retailer>`.
 - When the first failure creates the key, the worker sets a 60-second TTL.
 - If the counter becomes greater than 5 within that 60-second window, the worker opens the circuit.
+- Retryable failures count too, not only terminal failures.
 
 ### Circuit State
 
@@ -107,6 +123,12 @@ Behavior:
 - A failed probe reopens the circuit by setting `circuit:<retailer>` back to `OPEN` with a fresh 60-second TTL.
 - Missing `circuit:<retailer>` should be treated as effectively closed by the API.
 
+Worker behavior:
+
+- If the worker claims a task and finds the retailer circuit `OPEN`, it skips the task, clears the lock, and ACKs the message.
+- If the worker successfully processes a `HALF_OPEN` probe, it closes the circuit, clears the failures bucket, and clears the probe lock.
+- If the `HALF_OPEN` probe fails, it reopens the circuit for another 60 seconds.
+
 ### Half-Open Probe Lock
 
 - Key: `circuit-probe:<retailer>`
@@ -121,6 +143,24 @@ Behavior:
 - If `circuit:<retailer>` is `HALF_OPEN`, the API allows exactly one normal request through by atomically creating `circuit-probe:<retailer>`.
 - While that probe key exists, all other half-open requests return `429 {"error":"circuit open"}`.
 - The worker should clear the probe key once the probe succeeds or fails.
+
+## Retry Metadata
+
+- Key: `retry:message:<retailer>:<message_id>`
+- Type: string containing JSON metadata
+- Write owner: worker
+
+Fields:
+
+- `retryCount`
+- `nextAttemptAt`
+
+Behavior:
+
+- Retryable errors do not ACK the stream entry immediately.
+- The worker keeps the message pending, stores retry metadata, and retries the same claimed message after backoff.
+- Retry delays are short and bounded: 10s, 20s, 30s.
+- If retries are exhausted, the worker clears the lock and ACKs the failed message.
 
 ## Consumer Groups
 

@@ -22,6 +22,8 @@ npm install
 npm start
 ```
 
+Open `http://localhost:3000/` to use the browser search interface.
+
 PostgreSQL runs [postgres/init.sql](/Users/nicolasarsenault/Desktop/projects/Cloud-System/postgres/init.sql) on first boot only, when the `postgres_data` volume is empty.
 
 If you need to re-run the init script from scratch, remove the Postgres volume first:
@@ -43,14 +45,18 @@ If you already initialized PostgreSQL before `logs.worker_id` became nullable, t
 
 ## API
 
-The backend exposes one endpoint:
+The backend exposes these endpoints:
 
 ```http
+GET /
 GET /listings?retailer=<retailer>&zip=<zip>&query=<query>
+GET /health
+GET /ready
 ```
 
 Behavior:
 
+- Returns the static search page from `/`
 - Returns `200` with cached listings when the Redis cache contains the query result
 - Returns `202` with `Processing please wait` and a `requestId` when the query is queued
 - Returns the same `202` and existing `requestId` when the same retailer/zip/query is already in flight
@@ -59,6 +65,10 @@ Behavior:
 - Returns `429` with `circuit open` when a retailer circuit is `OPEN`, or when a `HALF_OPEN` retailer already has a probe in flight
 - Returns `400` JSON when `retailer`, `zip`, or `query` is missing or blank
 - Returns `503` JSON if Redis is unavailable
+- Returns `200` from `/health` when the process is alive
+- Returns `200` from `/ready` only when Redis, PostgreSQL, and the startup compatibility check are ready
+
+The browser UI submits searches to `GET /listings` from the same origin. When the API returns `202`, the page shows the `requestId` and automatically retries until cached results are available or an error is returned.
 
 API requests are also logged into PostgreSQL:
 
@@ -73,6 +83,38 @@ Runtime tuning is env-configurable via:
 - `RETAILER_RATE_LIMIT_PER_SECOND`
 - `CIRCUIT_PROBE_TTL_SECONDS`
 - `SCRAPE_HOUR_THRESHOLD`
+
+## Worker
+
+The worker also exposes health endpoints on its own HTTP port:
+
+```http
+GET /health
+GET /ready
+```
+
+Behavior:
+
+- `/health` returns `200` when the worker process is alive
+- `/ready` returns `200` only when Redis is reachable, consumer groups were initialized, and the worker is not shutting down
+
+Worker runtime is env-configurable via:
+
+- `WORKER_PORT`
+- `PGHOST`
+- `POSTGRES_PORT`
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+
+Worker writes PostgreSQL rows too:
+
+- every processing attempt writes worker logs into `logs`
+- worker logs use `worker_id = <WORKER_ID>`
+- successful and skipped attempts write `debug` terminal logs
+- failed attempts write `error` terminal logs
+- every attempt writes one `search_runs` row
+- `search_runs.logid` points to the terminal worker log row for that attempt
 
 ## Redis Runtime Layout
 

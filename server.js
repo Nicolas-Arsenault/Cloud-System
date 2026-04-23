@@ -1,9 +1,11 @@
 const crypto = require("crypto");
+const path = require("path");
 const express = require("express");
 const { Pool } = require("pg");
 const { createClient } = require("redis");
 
 const app = express();
+const publicDir = path.join(__dirname, "public");
 const port = process.env.PORT || 3000;
 const redisHost = process.env.REDIS_HOST || "127.0.0.1";
 const redisPort = process.env.REDIS_PORT || 6379;
@@ -38,6 +40,8 @@ const postgresPool = new Pool({
   user: postgresUser,
   password: postgresPassword
 });
+const startedAt = Date.now();
+let postgresCompatibilityReady = false;
 
 redisClient.on("error", (error) => {
   console.error("Redis client error", error);
@@ -57,7 +61,65 @@ async function ensurePostgresCompatibility() {
   await postgresPool.query(
     "ALTER TABLE logs ALTER COLUMN worker_id DROP NOT NULL"
   );
+  postgresCompatibilityReady = true;
 }
+
+async function checkRedisReady() {
+  try {
+    await ensureRedisConnection();
+    await redisClient.ping();
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+async function checkPostgresReady() {
+  try {
+    await postgresPool.query("SELECT 1");
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "api",
+    uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000)
+  });
+});
+
+app.get("/ready", async (req, res) => {
+  const [redisReady, postgresReady] = await Promise.all([
+    checkRedisReady(),
+    checkPostgresReady()
+  ]);
+  const ready = postgresCompatibilityReady && redisReady && postgresReady;
+
+  res.status(ready ? 200 : 503).json({
+    status: ready ? "ready" : "not_ready",
+    service: "api",
+    checks: {
+      startup: {
+        postgresCompatibilityReady
+      },
+      redis: {
+        ready: redisReady
+      },
+      postgres: {
+        ready: postgresReady
+      }
+    }
+  });
+});
+
+app.use(express.static(publicDir));
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
+});
 
 function normalizeValue(value) {
   return value.trim();

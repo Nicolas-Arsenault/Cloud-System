@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloud-System Search</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="search-panel">
+        <p class="eyebrow">Cloud-System</p>
+        <h1>Search store listings</h1>
+        <p class="intro">
+          Submit a retailer, zip code, and product query to the existing
+          listings API.
+        </p>
+
+        <form id="search-form" class="search-form">
+          <label class="field">
+            <span>Retailer</span>
+            <select id="retailer" name="retailer" required>
+              <option value="">Choose a retailer</option>
+              <option value="walmart">Walmart</option>
+              <option value="target">Target</option>
+              <option value="kroger">Kroger</option>
+              <option value="ralphs">Ralphs</option>
+              <option value="safeway">Safeway</option>
+              <option value="aldi">Aldi</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Zip code</span>
+            <input
+              id="zip"
+              name="zip"
+              type="text"
+              inputmode="numeric"
+              autocomplete="postal-code"
+              placeholder="90210"
+              required
+            />
+          </label>
+
+          <label class="field field-query">
+            <span>Search query</span>
+            <input
+              id="query"
+              name="query"
+              type="text"
+              autocomplete="off"
+              placeholder="organic milk"
+              required
+            />
+          </label>
+
+          <button id="submit-button" type="submit">Search</button>
+        </form>
+
+        <section class="status-card">
+          <p id="status-badge" class="status-badge status-idle">Idle</p>
+          <p id="status-message" class="status-message">
+            Waiting for a search request.
+          </p>
+          <p id="request-id" class="request-id" hidden></p>
+        </section>
+      </section>
+
+      <section class="results-panel">
+        <div class="results-header">
+          <h2>Results</h2>
+          <p id="results-meta" class="results-meta">
+            No search has been submitted yet.
+          </p>
+        </div>
+
+        <p id="error-message" class="error-message" hidden></p>
+
+        <ul id="results-list" class="results-list"></ul>
+      </section>
+    </main>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
