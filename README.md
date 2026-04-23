@@ -39,6 +39,8 @@ The init SQL creates:
 - `search_runs`
 - `history`
 
+If you already initialized PostgreSQL before `logs.worker_id` became nullable, the API now runs a compatibility `ALTER TABLE` on startup to drop the old `NOT NULL` constraint.
+
 ## API
 
 The backend exposes one endpoint:
@@ -52,8 +54,25 @@ Behavior:
 - Returns `200` with cached listings when the Redis cache contains the query result
 - Returns `202` with `Processing please wait` and a `requestId` when the query is queued
 - Returns the same `202` and existing `requestId` when the same retailer/zip/query is already in flight
+- Returns `429` with `rate limited` when a retailer exceeds 5 uncached requests in 1 second
+- Returns `429` with `too busy` when the global scrape guardrail is over threshold
+- Returns `429` with `circuit open` when a retailer circuit is `OPEN`, or when a `HALF_OPEN` retailer already has a probe in flight
 - Returns `400` JSON when `retailer`, `zip`, or `query` is missing or blank
 - Returns `503` JSON if Redis is unavailable
+
+API requests are also logged into PostgreSQL:
+
+- every handled request writes a `debug` row into `logs`
+- API logs use `worker_id = NULL`
+- cache-hit responses also write a row into `history`
+- `history.userid` is currently `0` for anonymous API traffic
+
+Runtime tuning is env-configurable via:
+
+- `LOCK_TTL_SECONDS`
+- `RETAILER_RATE_LIMIT_PER_SECOND`
+- `CIRCUIT_PROBE_TTL_SECONDS`
+- `SCRAPE_HOUR_THRESHOLD`
 
 ## Redis Runtime Layout
 
@@ -62,6 +81,10 @@ Redis does not use tables. The expected runtime layout is:
 - Queue streams: `queue:retailer:<retailer>`
 - Listings cache keys: `cache:listings:<retailer>:<zip>:<normalized_query>`
 - In-flight dedupe locks: `lock:listings:<retailer>:<zip>:<normalized_query>`
+- Retailer rate-limit keys: `rate:<retailer>:<epoch_second>`
+- Global scrape guardrail counter: `scrape_hour:number`
+- Circuit state keys: `circuit:<retailer>`
+- Circuit half-open probe locks: `circuit-probe:<retailer>`
 - Consumer groups: `group:retailer:<retailer>`
 - Cache keys with 20 minute TTL: `cache:<namespace>:<key>`
 - Locks: `lock:<retailer>:<resource>`
@@ -70,4 +93,6 @@ Redis does not use tables. The expected runtime layout is:
 - Circuit breaker counters: `cb:failures:<retailer>`
 - Circuit breaker open state: `cb:open:<retailer>`
 
-Cached listings are stored as a raw JSON array with a 20 minute TTL. Queue entries include `requestId`, `retailer`, `zip`, and `query`. In-flight listing locks store the active `requestId` for 5 minutes so duplicate requests reuse the same job instead of enqueueing twice.
+Cached listings are stored as a raw JSON array with a 20 minute TTL. Queue entries include `requestId`, `retailer`, `zip`, and `query`. In-flight listing locks store the active `requestId` for 5 minutes so duplicate requests reuse the same job instead of enqueueing twice. The API reads `scrape_hour:number` before locking and enqueueing, blocks only when that value is strictly greater than `SCRAPE_HOUR_THRESHOLD`, and leaves counter increments to the worker. Uncached requests also increment a retailer-scoped 1-second key and return `429` once the count is greater than 5.
+
+More detailed Redis behavior is documented in [docs/redis.md](/Users/nicolasarsenault/Desktop/projects/Cloud-System/docs/redis.md).

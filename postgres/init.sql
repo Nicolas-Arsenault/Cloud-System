@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS logs (
     "timestamp" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     level TEXT NOT NULL,
     msg TEXT NOT NULL,
-    worker_id TEXT NOT NULL
+    worker_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS search_runs (
