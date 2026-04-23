@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cloud-System Logs</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="logs-shell">
+      <div class="logs-layout">
+        <section class="logs-sidebar">
+          <nav class="page-nav" aria-label="Primary">
+            <a class="page-nav-link" href="/">Search</a>
+            <a class="page-nav-link page-nav-link-active" href="/logs">Logs</a>
+          </nav>
+
+          <p class="eyebrow">Cloud-System</p>
+          <h1>Database logs</h1>
+          <p class="logs-intro">
+            Recent rows from PostgreSQL, refreshed automatically for a quick
+            operational view.
+          </p>
+
+          <div class="logs-summary">
+            <article class="summary-card">
+              <p class="summary-label">Status</p>
+              <p id="logs-status" class="summary-value">Loading</p>
+            </article>
+
+            <article class="summary-card">
+              <p class="summary-label">Last updated</p>
+              <p id="logs-updated" class="summary-value">Waiting</p>
+            </article>
+
+            <article class="summary-card">
+              <p class="summary-label">Rows shown</p>
+              <p id="logs-count" class="summary-value">0</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="logs-main">
+          <div class="results-header">
+            <div>
+              <h2>Recent log rows</h2>
+              <p id="logs-meta" class="results-meta">Fetching database logs...</p>
+            </div>
+          </div>
+
+          <p id="logs-error" class="error-message" hidden></p>
+
+          <div id="logs-empty" class="empty-state" hidden>
+            No log rows available yet.
+          </div>
+
+          <div id="logs-table-wrap" class="logs-table-wrap" hidden>
+            <table class="logs-table">
+              <thead>
+                <tr>
+                  <th scope="col">Timestamp</th>
+                  <th scope="col">Level</th>
+                  <th scope="col">Worker</th>
+                  <th scope="col">Message</th>
+                </tr>
+              </thead>
+              <tbody id="logs-table-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script src="/logs.js" defer></script>
+  </body>
+</html>

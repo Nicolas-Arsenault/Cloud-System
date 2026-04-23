@@ -22,7 +22,9 @@ npm install
 npm start
 ```
 
-Open `http://localhost:3000/` to use the browser search interface.
+`npm start` automatically loads values from `.env`.
+
+Open `http://localhost:3000/` for the browser search interface and `http://localhost:3000/logs` for the logs viewer.
 
 PostgreSQL runs [postgres/init.sql](/Users/nicolasarsenault/Desktop/projects/Cloud-System/postgres/init.sql) on first boot only, when the `postgres_data` volume is empty.
 
@@ -49,6 +51,8 @@ The backend exposes these endpoints:
 
 ```http
 GET /
+GET /logs
+GET /api/logs
 GET /listings?retailer=<retailer>&zip=<zip>&query=<query>
 GET /health
 GET /ready
@@ -57,6 +61,8 @@ GET /ready
 Behavior:
 
 - Returns the static search page from `/`
+- Returns the static logs page from `/logs`
+- Returns recent PostgreSQL log rows from `/api/logs`
 - Returns `200` with cached listings when the Redis cache contains the query result
 - Returns `202` with `Processing please wait` and a `requestId` when the query is queued
 - Returns the same `202` and existing `requestId` when the same retailer/zip/query is already in flight
@@ -69,6 +75,7 @@ Behavior:
 - Returns `200` from `/ready` only when Redis, PostgreSQL, and the startup compatibility check are ready
 
 The browser UI submits searches to `GET /listings` from the same origin. When the API returns `202`, the page shows the `requestId` and automatically retries until cached results are available or an error is returned.
+The logs viewer polls `GET /api/logs` on the same origin and renders the newest database log rows first.
 
 API requests are also logged into PostgreSQL:
 
@@ -83,6 +90,7 @@ Runtime tuning is env-configurable via:
 - `RETAILER_RATE_LIMIT_PER_SECOND`
 - `CIRCUIT_PROBE_TTL_SECONDS`
 - `SCRAPE_HOUR_THRESHOLD`
+- `LOGS_PAGE_SIZE`
 
 ## Worker
 
@@ -106,6 +114,8 @@ Worker runtime is env-configurable via:
 - `POSTGRES_DB`
 - `POSTGRES_USER`
 - `POSTGRES_PASSWORD`
+
+`npm run worker` automatically loads values from `worker.env`.
 
 Worker writes PostgreSQL rows too:
 

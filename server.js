@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 const express = require("express");
 const { Pool } = require("pg");
 const { createClient } = require("redis");
@@ -30,6 +31,7 @@ const scrapeHourThreshold = Number.parseInt(
   process.env.SCRAPE_HOUR_THRESHOLD || "100",
   10
 );
+const logsPageSize = Number.parseInt(process.env.LOGS_PAGE_SIZE || "100", 10);
 const redisClient = createClient({
   url: `redis://${redisHost}:${redisPort}`
 });
@@ -119,6 +121,31 @@ app.use(express.static(publicDir));
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
+});
+
+app.get("/logs", (req, res) => {
+  res.sendFile(path.join(publicDir, "logs.html"));
+});
+
+app.get("/api/logs", async (req, res) => {
+  try {
+    const { rows } = await postgresPool.query(
+      `SELECT id, "timestamp", level, msg, worker_id
+       FROM logs
+       ORDER BY "timestamp" DESC, id DESC
+       LIMIT $1`,
+      [logsPageSize]
+    );
+
+    res.status(200).json({
+      logs: rows
+    });
+  } catch (error) {
+    console.error("Failed to read logs", error);
+    res.status(503).json({
+      error: "Logs unavailable."
+    });
+  }
 });
 
 function normalizeValue(value) {
@@ -347,5 +374,6 @@ ensurePostgresCompatibility()
       console.log(`Retailer rate limit set to ${retailerRateLimitPerSecond} requests/second`);
       console.log(`Circuit probe TTL set to ${circuitProbeTtlSeconds} seconds`);
       console.log(`Scrape hour threshold set to ${scrapeHourThreshold}`);
+      console.log(`Logs page size set to ${logsPageSize}`);
     });
   });
