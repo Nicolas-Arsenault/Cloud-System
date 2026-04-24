@@ -59,12 +59,6 @@ async function ensureRedisConnection() {
   }
 }
 
-async function ensurePostgresCompatibility() {
-  await postgresPool.query(
-    "ALTER TABLE logs ALTER COLUMN worker_id DROP NOT NULL"
-  );
-  postgresCompatibilityReady = true;
-}
 
 async function checkRedisReady() {
   try {
@@ -358,22 +352,15 @@ app.get("/listings", async (req, res) => {
   }
 });
 
-ensurePostgresCompatibility()
-  .then(() => {
-    console.log("Postgres compatibility check complete");
-  })
-  .catch((error) => {
-    console.error("Postgres compatibility check failed", error);
-  })
-  .finally(() => {
-    app.listen(port, () => {
-      console.log(`API listening on port ${port}`);
-      console.log(`Redis connection configured for ${redisHost}:${redisPort}`);
-      console.log(`Postgres connection configured for ${postgresHost}:${postgresPort}`);
-      console.log(`Lock TTL set to ${lockTtlSeconds} seconds`);
-      console.log(`Retailer rate limit set to ${retailerRateLimitPerSecond} requests/second`);
-      console.log(`Circuit probe TTL set to ${circuitProbeTtlSeconds} seconds`);
-      console.log(`Scrape hour threshold set to ${scrapeHourThreshold}`);
-      console.log(`Logs page size set to ${logsPageSize}`);
-    });
-  });
+
+app.listen(port, () => {
+  console.log(`API listening on port ${port}`);
+  console.log(`Redis connection configured for ${redisHost}:${redisPort}`);
+  console.log(`Postgres connection configured for ${postgresHost}:${postgresPort}`);
+  console.log(`Lock TTL set to ${lockTtlSeconds} seconds`);
+  console.log(`Retailer rate limit set to ${retailerRateLimitPerSecond} requests/second`);
+  console.log(`Circuit probe TTL set to ${circuitProbeTtlSeconds} seconds`);
+  console.log(`Scrape hour threshold set to ${scrapeHourThreshold}`);
+  console.log(`Logs page size set to ${logsPageSize}`);
+});
+
